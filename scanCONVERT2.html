@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ScanConvert — Document Scanner</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fa;color:#17202a}
+button,input,select{font:inherit}button{cursor:pointer;border:0}
+.app{min-height:100vh}.topbar{height:68px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 24px;gap:14px;position:sticky;top:0;z-index:10}
+.logo{width:38px;height:38px;border-radius:10px;background:#111827;color:#fff;display:grid;place-items:center;font-weight:800}.brand{font-size:20px;font-weight:800}.sub{color:#7b8490;font-size:12px;margin-left:2px}
+.layout{display:grid;grid-template-columns:320px 1fr;min-height:calc(100vh - 68px)}
+.sidebar{background:#fff;border-right:1px solid #e5e7eb;padding:20px;overflow:auto}.main{padding:24px;min-width:0}
+.section-title{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#8a94a3;font-weight:800;margin:8px 0 12px}
+.btn{width:100%;padding:12px 14px;border-radius:10px;background:#f1f3f5;color:#17202a;font-weight:700;margin-bottom:9px;text-align:left}
+.btn:hover{background:#e7eaee}.primary{background:#111827;color:#fff}.primary:hover{background:#263241}
+.file-input{display:none}.small{font-size:12px;color:#7b8490;line-height:1.5}
+.controls{border-top:1px solid #edf0f2;margin-top:18px;padding-top:18px}
+.control{display:flex;align-items:center;justify-content:space-between;margin:12px 0;font-size:14px}
+.control input[type=range]{width:145px}.select{padding:9px;border:1px solid #dfe3e8;border-radius:8px;background:#fff}
+.pages{display:flex;gap:10px;overflow:auto;padding:10px 2px 4px}.thumb{min-width:90px;height:115px;border:2px solid #e5e7eb;border-radius:9px;overflow:hidden;background:#fafafa;position:relative}.thumb.active{border-color:#111827}.thumb img{width:100%;height:100%;object-fit:contain}.thumb span{position:absolute;bottom:4px;left:5px;background:#111827;color:#fff;border-radius:5px;padding:2px 6px;font-size:10px}
+.workspace{background:#fff;border:1px solid #e3e6ea;border-radius:16px;min-height:600px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 5px 20px #00000008}
+.workspace-head{padding:16px 18px;border-bottom:1px solid #edf0f2;display:flex;align-items:center;justify-content:space-between;gap:12px}.workspace-title{font-weight:800}.status{font-size:12px;color:#7b8490}
+.preview{flex:1;display:flex;align-items:center;justify-content:center;padding:30px;background:#f8f9fb;min-height:470px;position:relative}
+#previewCanvas{max-width:100%;max-height:65vh;display:none;background:white;box-shadow:0 10px 30px #0002}
+.empty{text-align:center;color:#7b8490}.empty-icon{font-size:50px;margin-bottom:12px}.empty h2{margin:0 0 8px;color:#202833}
+.bottom{padding:15px 18px;border-top:1px solid #edf0f2;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.action{padding:10px 13px;border-radius:9px;background:#eef1f4;font-weight:700}.action.primary{background:#111827;color:#fff}
+.camera{position:fixed;inset:0;background:#000e;z-index:50;display:none;align-items:center;justify-content:center;padding:20px}.camera-box{background:#fff;border-radius:16px;max-width:900px;width:100%;overflow:hidden}.camera-video{width:100%;display:block;background:#111;max-height:75vh;object-fit:contain}.camera-bar{padding:14px;display:flex;gap:10px;justify-content:center}.camera-bar button{padding:11px 18px;border-radius:9px;font-weight:700}
+.toast{position:fixed;right:20px;bottom:20px;background:#111827;color:#fff;padding:12px 16px;border-radius:10px;display:none;z-index:100;font-size:13px}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.sidebar{border-right:0;border-bottom:1px solid #e5e7eb}.main{padding:12px}.workspace{min-height:500px}.sub{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="topbar">
+  <div class="logo">S</div><div><div class="brand">ScanConvert</div><div class="sub">Professional document scanner</div></div>
+</header>
+
+<div class="layout">
+<aside class="sidebar">
+  <div class="section-title">Import</div>
+  <button class="btn primary" id="cameraBtn">📷 Scan with camera</button>
+  <button class="btn" id="uploadBtn">📁 Upload image</button>
+  <input class="file-input" id="fileInput" type="file" accept="image/*" multiple>
+
+  <div class="section-title" style="margin-top:22px">Pages</div>
+  <div id="pages" class="pages"></div>
+  <button class="btn" id="deleteBtn">🗑️ Delete selected page</button>
+
+  <div class="controls">
+    <div class="section-title">Enhancement</div>
+    <div class="control"><span>Mode</span>
+      <select id="mode" class="select">
+        <option value="original">Original</option>
+        <option value="document">Document</option>
+        <option value="bw">Black & White</option>
+        <option value="gray">Grayscale</option>
+      </select>
+    </div>
+    <div class="control"><span>Brightness</span><input id="brightness" type="range" min="-60" max="60" value="0"></div>
+    <div class="control"><span>Contrast</span><input id="contrast" type="range" min="50" max="180" value="100"></div>
+    <button class="btn" id="resetBtn">↺ Reset adjustments</button>
+  </div>
+
+  <div class="controls">
+    <div class="section-title">Export</div>
+    <div class="control"><span>Format</span>
+      <select id="format" class="select">
+        <option value="pdf">PDF</option>
+        <option value="jpeg">JPEG</option>
+        <option value="png">PNG</option>
+        <option value="webp">WEBP</option>
+      </select>
+    </div>
+    <button class="btn primary" id="exportBtn">⬇ Export file</button>
+    <button class="btn" id="copyBtn">📋 Copy image</button>
+    <div class="small">Everything is processed locally in your browser. No upload is required.</div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="workspace">
+    <div class="workspace-head"><div class="workspace-title">Document preview</div><div class="status" id="status">No document selected</div></div>
+    <div class="preview">
+      <div class="empty" id="empty">
+        <div class="empty-icon">📄</div><h2>Start a scan</h2>
+        <div>Upload an image or use your camera to create a document.</div>
+      </div>
+      <canvas id="previewCanvas"></canvas>
+    </div>
+    <div class="bottom">
+      <div class="actions">
+        <button class="action" id="rotateLeft">↶ Rotate</button>
+        <button class="action" id="rotateRight">↷ Rotate</button>
+      </div>
+      <div class="small" id="pageInfo">0 pages</div>
+    </div>
+  </div>
+</main>
+</div>
+</div>
+
+<div class="camera" id="cameraModal">
+  <div class="camera-box">
+    <video id="video" class="camera-video" autoplay playsinline></video>
+    <div class="camera-bar">
+      <button id="captureBtn" class="primary">● Capture</button>
+      <button id="closeCamera">Close</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const state={pages:[],selected:-1,stream:null,rotation:0};
+const $=id=>document.getElementById(id);
+const canvas=$('previewCanvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
+
+function toast(msg){$('toast').textContent=msg;$('toast').style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>$('toast').style.display='none',2200)}
+function setStatus(t){$('status').textContent=t}
+function renderThumbs(){
+  const box=$('pages');box.innerHTML='';
+  state.pages.forEach((p,i)=>{
+    const d=document.createElement('div');d.className='thumb'+(i===state.selected?' active':'');
+    const im=document.createElement('img');im.src=p.src;d.appendChild(im);
+    const s=document.createElement('span');s.textContent=i+1;d.appendChild(s);
+    d.onclick=()=>{state.selected=i;state.rotation=state.pages[i].rotation||0;renderThumbs();renderPreview()};
+    box.appendChild(d);
+  });
+  $('pageInfo').textContent=state.pages.length+' page'+(state.pages.length===1?'':'s');
+}
+function addPage(src){
+  state.pages.push({src,rotation:0});state.selected=state.pages.length-1;state.rotation=0;
+  renderThumbs();renderPreview();setStatus('Page '+(state.selected+1)+' selected');
+}
+function loadImage(src){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=src})}
+async function renderPreview(){
+  if(state.selected<0){canvas.style.display='none';$('empty').style.display='block';setStatus('No document selected');return}
+  const p=state.pages[state.selected],im=await loadImage(p.src),rot=((p.rotation||0)%360+360)%360;
+  const rad=rot*Math.PI/180,swap=rot===90||rot===270;
+  const w=im.naturalWidth,h=im.naturalHeight;canvas.width=swap?h:w;canvas.height=swap?w:h;
+  ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(rad);ctx.translate(-w/2,-h/2);
+  ctx.filter=buildFilter();ctx.drawImage(im,0,0,w,h);ctx.restore();ctx.filter='none';
+  canvas.style.display='block';$('empty').style.display='none';setStatus('Page '+(state.selected+1)+' selected');
+}
+function buildFilter(){
+  const b=100+Number($('brightness').value),c=Number($('contrast').value);
+  let f=`brightness(${b}%) contrast(${c}%)`;
+  const mode=$('mode').value;
+  if(mode==='gray'||mode==='bw')f+=' grayscale(1)';
+  return f;
+}
+async function processedCanvas(src,rotation=0){
+  const im=await loadImage(src),rot=((rotation%360)+360)%360,swap=rot===90||rot===270;
+  const c=document.createElement('canvas'),x=c.getContext('2d');
+  c.width=swap?im.naturalHeight:im.naturalWidth;c.height=swap?im.naturalWidth:im.naturalHeight;
+  x.save();x.translate(c.width/2,c.height/2);x.rotate(rot*Math.PI/180);x.translate(-im.naturalWidth/2,-im.naturalHeight/2);
+  x.filter=buildFilter();x.drawImage(im,0,0);x.restore();x.filter='none';
+  if($('mode').value==='document'||$('mode').value==='bw'){
+    const d=x.getImageData(0,0,c.width,c.height),a=d.data;
+    for(let i=0;i<a.length;i+=4){
+      const lum=.299*a[i]+.587*a[i+1]+.114*a[i+2];
+      if($('mode').value==='bw'){const v=lum>160?255:0;a[i]=a[i+1]=a[i+2]=v}
+      else {const v=Math.max(0,Math.min(255,(lum-128)*1.35+128));a[i]=a[i+1]=a[i+2]=v}
+    }
+    x.putImageData(d,0,0);
+  }
+  return c;
+}
+
+/* Upload */
+$('uploadBtn').onclick=()=>$('fileInput').click();
+$('fileInput').onchange=async e=>{
+  for(const f of e.target.files){if(!f.type.startsWith('image/'))continue;addPage(await fileToDataURL(f))}
+  e.target.value='';
+};
+function fileToDataURL(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
+
+/* Camera */
+$('cameraBtn').onclick=async()=>{
+  try{
+    state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    $('video').srcObject=state.stream;$('cameraModal').style.display='flex';
+  }catch(e){toast('Camera permission was denied or unavailable.')}
+};
+$('closeCamera').onclick=closeCamera;
+function closeCamera(){if(state.stream)state.stream.getTracks().forEach(t=>t.stop());state.stream=null;$('video').srcObject=null;$('cameraModal').style.display='none'}
+$('captureBtn').onclick=()=>{
+  const v=$('video');if(!v.videoWidth)return;
+  const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);
+  addPage(c.toDataURL('image/jpeg',.95));closeCamera();toast('Page captured');
+};
+
+/* Adjustments */
+['mode','brightness','contrast'].forEach(id=>$(id).oninput=renderPreview);
+$('resetBtn').onclick=()=>{$('mode').value='original';$('brightness').value=0;$('contrast').value=100;renderPreview()};
+$('rotateLeft').onclick=()=>rotate(-90);$('rotateRight').onclick=()=>rotate(90);
+function rotate(deg){if(state.selected<0)return;state.pages[state.selected].rotation=(state.pages[state.selected].rotation+deg+360)%360;state.rotation=state.pages[state.selected].rotation;renderThumbs();renderPreview()}
+
+/* Delete */
+$('deleteBtn').onclick=()=>{
+  if(state.selected<0)return toast('Select a page first');
+  state.pages.splice(state.selected,1);state.selected=Math.min(state.selected,state.pages.length-1);
+  renderThumbs();renderPreview();
+};
+
+/* Clipboard */
+$('copyBtn').onclick=async()=>{
+  if(state.selected<0)return toast('Select a page first');
+  try{
+    const c=await processedCanvas(state.pages[state.selected].src,state.pages[state.selected].rotation);
+    const blob=await new Promise(r=>c.toBlob(r,'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+    toast('Image copied to clipboard');
+  }catch(e){toast('Clipboard copy is not supported here')}
+};
+
+/* Export */
+$('exportBtn').onclick=async()=>{
+  if(state.pages.length===0)return toast('Add at least one page');
+  const fmt=$('format').value;
+  if(fmt==='pdf')return exportPDF();
+  const p=state.pages[state.selected<0?0:state.selected];
+  const c=await processedCanvas(p.src,p.rotation);
+  const mime=fmt==='jpeg'?'image/jpeg':fmt==='png'?'image/png':'image/webp';
+  c.toBlob(b=>downloadBlob(b,`scan-page-${(state.selected+1)}.${fmt==='jpeg'?'jpg':fmt}`),mime,.95);
+};
+
+/*
+  FIXED PDF WRITER
+  The previous blank-PDF issue commonly comes from malformed xref offsets,
+  missing image decode metadata, or incorrect binary string handling.
+  This writer builds a valid PDF with exact byte offsets and embeds each
+  JPEG as an image XObject. Every image is converted to JPEG first.
+*/
+async function exportPDF(){
+  setStatus('Creating PDF…');toast('Creating PDF…');
+  try{
+    const jpgs=[];
+    for(const p of state.pages){
+      const c=await processedCanvas(p.src,p.rotation);
+      const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.94));
+      jpgs.push({bytes:new Uint8Array(await blob.arrayBuffer()),w:c.width,h:c.height});
+    }
+    const pdf=buildPDF(jpgs);
+    downloadBlob(new Blob([pdf],{type:'application/pdf'}),'ScanConvert.pdf');
+    setStatus('PDF created successfully');toast('PDF downloaded successfully');
+  }catch(e){console.error(e);setStatus('PDF creation failed');toast('Could not create PDF')}
+}
+
+function ascii(s){return new TextEncoder().encode(s)}
+function concatArrays(arrs){
+  let n=0;for(const a of arrs)n+=a.length;
+  const out=new Uint8Array(n);let p=0;
+  for(const a of arrs){out.set(a,p);p+=a.length}
+  return out;
+}
+function buildPDF(images){
+  const objects=[];
+  const add=(body)=>{objects.push(body);return objects.length};
+  const catalog=add(null),pagesObj=add(null);
+  const pageIds=[],contentIds=[],imageIds=[];
+  for(const im of images){
+    const iid=add(null);imageIds.push(iid);
+    const cid=add(null);contentIds.push(cid);
+    const pid=add(null);pageIds.push(pid);
+  }
+  const header=concatArrays([ascii('%PDF-1.4\n'),new Uint8Array([0x25,0xFF,0xFF,0xFF,0xFF,0x0A])]);
+  let chunks=[header],offsets=[0],pos=header.length;
+  function addObj(id,data){
+    const prefix=ascii(`${id} 0 obj\n`);
+    const suffix=ascii('\nendobj\n');
+    const all=concatArrays([prefix,data,suffix]);
+    offsets[id]=pos;chunks.push(all);pos+=all.length;
+  }
+  const pageRefs=pageIds.map(id=>`${id} 0 R`).join(' ');
+  addObj(catalog,ascii(`<< /Type /Catalog /Pages ${pagesObj} 0 R >>`));
+  addObj(pagesObj,ascii(`<< /Type /Pages /Kids [${pageRefs}] /Count ${images.length} >>`));
+
+  for(let i=0;i<images.length;i++){
+    const im=images[i],iid=imageIds[i],cid=contentIds[i],pid=pageIds[i];
+    const imgHead=ascii(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`);
+    const imgTail=ascii('\nendstream');
+    addObj(iid,concatArrays([imgHead,im.bytes,imgTail]));
+
+    const content=`q\n${im.w} 0 0 ${im.h} 0 0 cm\n/Im0 Do\nQ\n`;
+    const cb=ascii(content);
+    addObj(cid,concatArrays([ascii(`<< /Length ${cb.length} >>\nstream\n`),cb,ascii('endstream')]));
+
+    const page=`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${im.w} ${im.h}] /Resources << /XObject << /Im0 ${iid} 0 R >> >> /Contents ${cid} 0 R >>`;
+    addObj(pid,ascii(page));
+  }
+  const xrefPos=pos;
+  let xref=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+  for(let i=1;i<objects.length+1;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+  xref+=`trailer\n<< /Size ${objects.length+1} /Root ${catalog} 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`;
+  chunks.push(ascii(xref));
+  return concatArrays(chunks);
+}
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+
+/* Drag/drop */
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',async e=>{
+  e.preventDefault();
+  const files=[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'));
+  for(const f of files)addPage(await fileToDataURL(f));
+});
+</script>
+</body>
+</html>
